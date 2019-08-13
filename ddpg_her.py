@@ -29,7 +29,7 @@ class DDPGAgent:
     def __init__(self, env, eval_env=None, gamma=0.99, actor_learning_rate=0.01, critic_learning_rate=0.01, tau=1e-3,
                  batch_size=16,
                  buffer_size=5e4, actor_units=256, actor_hidden_layers=1, critic_units=256, critic_hidden_layers=1,
-                 k=4, optimization_steps=20, num_epochs=10, num_episodes=50, action_noise=0.5):
+                 k=4, optimization_steps=20, num_epochs=10, num_episodes=20, action_noise=0.5):
         # Assume that the environment is in the format of openai's HER paper
         # (a dictionary of observation, achieved goal and desired goal)
         self.observation_space = env.observation_space
