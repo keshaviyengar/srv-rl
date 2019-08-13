@@ -400,7 +400,7 @@ if __name__ == '__main__':
     rl_ = DDPGAgent(env, **params)
     eval_success_rate, eval_ep_mean_reward = rl_.train()
     print('Evaluated final success rate: ,', eval_success_rate)
-    print('Evaluated final mean rewad per ep,', eval_ep_mean_reward)
+    print('Evaluated final mean reward per ep,', eval_ep_mean_reward)
 
     #print('Saving model...')
     #rl_.save_model('models/bit-flipping-env.ckpt')
