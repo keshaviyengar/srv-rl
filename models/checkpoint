@@ -1,0 +1,2 @@
+model_checkpoint_path: "bit-flipping-env.ckpt"
+all_model_checkpoint_paths: "bit-flipping-env.ckpt"

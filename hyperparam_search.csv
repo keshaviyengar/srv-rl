@@ -1,0 +1,4 @@
+number,state,value,datetime_start,datetime_complete,system_attrs
+,,,,,_number
+0,TrialState.COMPLETE,1.05,2019-08-13 11:43:16.946104,2019-08-13 11:45:04.836895,0
+1,TrialState.RUNNING,,2019-08-13 11:45:04.837203,,1
