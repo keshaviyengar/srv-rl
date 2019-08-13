@@ -1,0 +1,19 @@
+{
+  "agent_hyperparams": {
+    "gamma": 0.98,
+    "actor_learning_rate": 0.0001,
+    "critic_learning_rate": 0.0001,
+    "tau": 0.1,
+    "batch_size": 32,
+    "buffer_size": 5e4
+  },
+  "training_hyperparams": {
+    "replay": "her",
+    "k":4,
+    "optimization_steps": 10,
+    "num_epochs": 1000,
+    "num_episodes": 20,
+    "episode_length":10,
+    "action_noise":1
+  }
+}
