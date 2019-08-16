@@ -105,6 +105,16 @@ def ddpg_her_sample_params(trial, hyperparams):
     else:
         action_noise = hyperparams['action_noise']
 
+    if 'actor_mlp_units' not in hyperparams:
+        units = trial.suggest_categorical('units', [16, 32, 64, 128, 256])
+    else:
+        units = hyperparams['actor_mlp_units']
+
+    if 'actor_mlp_hidden_layers' not in hyperparams:
+        hidden_layers = trial.suggest_categorical('hidden_layers', [1, 2, 3])
+    else:
+        hidden = hyperparams['actor_mlp_hidden_layers']
+
     new_hyperparams = {
         'gamma': gamma,
         'actor_learning_rate': actor_learning_rate,
@@ -114,22 +124,14 @@ def ddpg_her_sample_params(trial, hyperparams):
         'buffer_size': buffer_size,
         'future_k': k,
         'optimization_steps': optimization_steps,
-        'action_noise': action_noise
+        'action_noise': action_noise,
+        'actor_mlp_hidden_layers': hidden_layers,
+        'actor_mlp_units': units,
+        'critic_mlp_hidden_layers': hidden_layers,
+        'critic_mlp_units': units
     }
 
     new_hyperparams.update(hyperparams)
 
     return new_hyperparams
 
-
-#from test_envs.bit_flipping_env import BitFlippingEnv
-#import json
-#
-#if __name__ == '__main__':
-#    env = BitFlippingEnv(continuous=True, max_steps=10)
-#    # Load json file of parameters
-#    with open("param_search_constants.json", 'r') as f:
-#        params = json.load(f)
-#
-#    opt_params_dataframe = hyperparam_opt(env=env, n_trials=10000, hyperparams=params)
-#    opt_params_dataframe.to_csv('hyperparam_search.csv', index=False, header=True)

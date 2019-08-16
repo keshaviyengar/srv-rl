@@ -8,6 +8,7 @@ import time
 
 from ddpg_her import DDPGAgent
 import test_envs
+import ctm2_envs
 from hyperparameter_opt import hyperparam_opt
 
 KILL = None
@@ -17,7 +18,7 @@ SAVE_WEIGHTS = 2
 
 parser = argparse.ArgumentParser(description="Implementation of DDPG with HER with multiprocessing for "
                                              "concentric tube robots.")
-parser.add_argument("--env", type=str, default="bit-flipping-v0")
+parser.add_argument("--env", type=str, default="Distal-1-Tube-Reach-v0")
 parser.add_argument("--env-args", type=dict, default={})
 parser.add_argument("--num-epochs", type=int, default=1000)
 parser.add_argument("--num-episodes", type=int, default=20)
@@ -49,6 +50,7 @@ train_json_file = args.training_json_file
 del args_dict["training_json_file"]
 hyperparam_search = args.hyperparam_search
 hyperparam_constants_json_file = args.hyperparam_constants_json_file
+del args_dict["hyperparam_constants_json_file"]
 
 print("training: %d hyperparameter-search: %d" % (train, hyperparam_search))
 del args_dict["train"]
@@ -64,7 +66,7 @@ if train:
             new_args = json.load(f)
             args_dict.update(new_args)
 
-    rl_agent = DDPGAgent(env, **args_dict)
+    rl_agent = DDPGAgent(env, sess=None, **args_dict)
     eval_success_rate, eval_ep_mean_reward = rl_agent.train()
     print('Evaluated final success rate: ,', eval_success_rate)
     print('Evaluated final mean reward per ep,', eval_ep_mean_reward)

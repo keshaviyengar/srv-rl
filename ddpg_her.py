@@ -26,10 +26,10 @@ class SingleEpisodeTrajectory:
 
 
 class DDPGAgent:
-    def __init__(self, env, eval_env=None, gamma=0.99, actor_learning_rate=0.01, critic_learning_rate=0.01, tau=1e-3,
-                 batch_size=16,
-                 buffer_size=5e4, actor_mlp_units=256, actor_mlp_hidden_layers=1, critic_mlp_units=256, critic_mlp_hidden_layers=1,
-                 future_k=4, optimization_steps=20, num_epochs=10, num_episodes=20, action_noise=0.5):
+    def __init__(self, env, sess=None, eval_env=None, gamma=0.99, actor_learning_rate=0.01, critic_learning_rate=0.01, tau=1e-3,
+                 batch_size=16, buffer_size=5e4, actor_mlp_units=256, actor_mlp_hidden_layers=1, critic_mlp_units=256,
+                 critic_mlp_hidden_layers=1, future_k=4, optimization_steps=20, num_epochs=10, num_episodes=20,
+                 action_noise=0.5):
         # Assume that the environment is in the format of openai's HER paper
         # (a dictionary of observation, achieved goal and desired goal)
         self.observation_space = env.observation_space
@@ -60,6 +60,9 @@ class DDPGAgent:
         self.memory = []
         self.buffer_size = buffer_size
 
+        if sess is None:
+            self.sess = tf.Session()
+
         # Initialize neural networks
         self._construct_networks(actor_mlp_units, actor_mlp_hidden_layers, critic_mlp_units, critic_mlp_hidden_layers)
 
@@ -72,8 +75,6 @@ class DDPGAgent:
 
     def _construct_networks(self, actor_units, actor_hidden_layers, critic_units, critic_hidden_layers):
         # initialize computation graph
-        tf.compat.v1.reset_default_graph()
-        self.sess = tf.compat.v1.Session()
 
         # initialize placeholders for computation
         self.R = tf.compat.v1.placeholder(tf.float32, shape=(None, 1), name='reward')
@@ -261,7 +262,7 @@ class DDPGAgent:
                 goal = self.convert_dict_to_obs(observation, ['desired_goal'])
 
                 # run env for episode length steps
-                for ep_step in range(self.train_env.max_steps):
+                for ep_step in range(self.train_env.max_episode_steps):
                     # track number of samples
                     total_step += 1
 
@@ -286,7 +287,7 @@ class DDPGAgent:
                                                     next_state_joint=next_observation['observation'],
                                                     next_state_ag=next_observation['achieved_goal'],
                                                     reward=reward, success=info['is_success'])
-                    if ep_step == self.train_env.max_steps - 1:
+                    if ep_step == self.train_env.max_episode_steps - 1:
                         replay = 'her'
                         if replay == 'her':
                             for t in range(len(single_episode_trajectory.memory)):
@@ -294,7 +295,7 @@ class DDPGAgent:
                                 for _ in range(self.k):
                                     # get new goal at t_future
                                     future = np.random.randint(t, len(single_episode_trajectory.memory))
-                                    goal_ = single_episode_trajectory.memory[future][3][:-self.goal_dim]
+                                    goal_ = single_episode_trajectory.memory[future][3][-self.goal_dim:]
 
                                     state_ = single_episode_trajectory.memory[t][0]
                                     action_ = single_episode_trajectory.memory[t][1]
@@ -347,6 +348,28 @@ class DDPGAgent:
         print("training time : %.2f" % (time.clock() - start), "s")
         return eval_success_rate, eval_ep_mean_r
 
+    def rollout(self):
+        obs = self.train_env.reset()
+        state = self.convert_dict_to_obs(obs, ["observation", "desired_goal"])
+        goal = self.convert_dict_to_obs(obs, ["desired_goal"])
+        single_episode_trajectory = SingleEpisodeTrajectory()
+        for ep_step in range(self.train_env.max_steps):
+            # get action from agent
+            action = self.choose_action([state], [goal], action_noise=self.action_noise)
+
+            # execute action in env
+            next_obs, reward, done, info = self.train_env.step(action)
+            next_state = self.convert_dict_to_obs(next_obs, ["observation", "desired_goal"])
+            single_episode_trajectory.add(state, action, reward, next_state, done, goal)
+            state = next_state
+
+            if done:
+                break
+
+        self.remember(single_episode_trajectory)
+        self.action_noise *= 0.9995
+        return single_episode_trajectory
+
     def evaluate_model(self, num_episodes):
         successes = 0
         ep_total_r = 0
@@ -359,7 +382,7 @@ class DDPGAgent:
             goal = self.convert_dict_to_obs(observation, ['desired_goal'])
 
             # run env for episode length steps
-            for ep_step in range(self.eval_env.max_steps):
+            for ep_step in range(self.eval_env.max_episode_steps):
                 # Get an action from agent
                 action = self.choose_action([state], [goal], action_noise=0)
 
@@ -387,28 +410,3 @@ class DDPGAgent:
 
     def restore_model(self, name):
         self.saver.restore(self.sess, name)
-
-# if __name__ == '__main__':
-#     env = BitFlippingEnv(n_bits=10, continuous=True, max_steps=10)
-#     #env = gym.make('Distal-1-Tube-Reach-v0')
-#     # Load json file of parameters
-#     with open("training_parameters.json", 'r') as f:
-#         params = json.load(f)
-#
-#     rl_ = DDPGAgent(env, **params)
-#     eval_success_rate, eval_ep_mean_reward = rl_.train()
-#     print('Evaluated final success rate: ,', eval_success_rate)
-#     print('Evaluated final mean reward per ep,', eval_ep_mean_reward)
-#
-#     #print('Saving model...')
-#     #rl_.save_model('models/bit-flipping-env.ckpt')
-#
-#     # print('Restore model...')
-#     # rl_2 = DDPGAgent(env, **params)
-#     # rl_2.restore_model('models/bit-flipping-env.ckpt')
-#
-#     # print('evaluate model...')
-#     # success_rate, ep_mean_r = rl_2.evaluate_model(num_episodes=100)
-#     # print(success_rate)
-#     # print(ep_mean_r)
-
