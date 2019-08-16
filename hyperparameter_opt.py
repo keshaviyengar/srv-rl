@@ -93,9 +93,9 @@ def ddpg_her_sample_params(trial, hyperparams):
     else:
         buffer_size = hyperparams['buffer_size']
     if 'k' not in hyperparams:
-        k = trial.suggest_categorical('k', [1, 2, 4, 4, 5, 6, 7, 8])
+        k = trial.suggest_categorical('future_k', [1, 2, 4, 4, 5, 6, 7, 8])
     else:
-        k = hyperparams['k']
+        k = hyperparams['future_k']
     if 'optimization_steps' not in hyperparams:
         optimization_steps = trial.suggest_categorical('optimization_steps', [5, 10, 15, 20, 25, 30])
     else:
@@ -112,7 +112,7 @@ def ddpg_her_sample_params(trial, hyperparams):
         'tau': tau,
         'batch_size': batch_size,
         'buffer_size': buffer_size,
-        'k': k,
+        'future_k': k,
         'optimization_steps': optimization_steps,
         'action_noise': action_noise
     }
@@ -122,14 +122,14 @@ def ddpg_her_sample_params(trial, hyperparams):
     return new_hyperparams
 
 
-from test_envs.bit_flipping_env import BitFlippingEnv
-import json
-
-if __name__ == '__main__':
-    env = BitFlippingEnv(continuous=True, max_steps=10)
-    # Load json file of parameters
-    with open("param_search_constants.json", 'r') as f:
-        params = json.load(f)
-
-    opt_params_dataframe = hyperparam_opt(env=env, n_trials=10000, hyperparams=params)
-    opt_params_dataframe.to_csv('hyperparam_search.csv', index=False, header=True)
+#from test_envs.bit_flipping_env import BitFlippingEnv
+#import json
+#
+#if __name__ == '__main__':
+#    env = BitFlippingEnv(continuous=True, max_steps=10)
+#    # Load json file of parameters
+#    with open("param_search_constants.json", 'r') as f:
+#        params = json.load(f)
+#
+#    opt_params_dataframe = hyperparam_opt(env=env, n_trials=10000, hyperparams=params)
+#    opt_params_dataframe.to_csv('hyperparam_search.csv', index=False, header=True)

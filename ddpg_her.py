@@ -28,8 +28,8 @@ class SingleEpisodeTrajectory:
 class DDPGAgent:
     def __init__(self, env, eval_env=None, gamma=0.99, actor_learning_rate=0.01, critic_learning_rate=0.01, tau=1e-3,
                  batch_size=16,
-                 buffer_size=5e4, actor_units=256, actor_hidden_layers=1, critic_units=256, critic_hidden_layers=1,
-                 k=4, optimization_steps=20, num_epochs=10, num_episodes=20, action_noise=0.5):
+                 buffer_size=5e4, actor_mlp_units=256, actor_mlp_hidden_layers=1, critic_mlp_units=256, critic_mlp_hidden_layers=1,
+                 future_k=4, optimization_steps=20, num_epochs=10, num_episodes=20, action_noise=0.5):
         # Assume that the environment is in the format of openai's HER paper
         # (a dictionary of observation, achieved goal and desired goal)
         self.observation_space = env.observation_space
@@ -49,7 +49,7 @@ class DDPGAgent:
         self.tau = tau
         self.batch_size = batch_size
         self.gradient_norm_clip = None
-        self.k = k
+        self.k = future_k
 
         self.optimization_steps = optimization_steps
         self.num_epochs = num_epochs
@@ -61,7 +61,7 @@ class DDPGAgent:
         self.buffer_size = buffer_size
 
         # Initialize neural networks
-        self._construct_networks(actor_units, actor_hidden_layers, critic_units, critic_hidden_layers)
+        self._construct_networks(actor_mlp_units, actor_mlp_hidden_layers, critic_mlp_units, critic_mlp_hidden_layers)
 
         self.logger = Logger()
         self.train_env = env
@@ -388,29 +388,27 @@ class DDPGAgent:
     def restore_model(self, name):
         self.saver.restore(self.sess, name)
 
-from test_envs.bit_flipping_env import BitFlippingEnv
-import json
-if __name__ == '__main__':
-    env = BitFlippingEnv(n_bits=10, continuous=True, max_steps=10)
-    #env = gym.make('Distal-1-Tube-Reach-v0')
-    # Load json file of parameters
-    with open("training_parameters.json", 'r') as f:
-        params = json.load(f)
-
-    rl_ = DDPGAgent(env, **params)
-    eval_success_rate, eval_ep_mean_reward = rl_.train()
-    print('Evaluated final success rate: ,', eval_success_rate)
-    print('Evaluated final mean reward per ep,', eval_ep_mean_reward)
-
-    #print('Saving model...')
-    #rl_.save_model('models/bit-flipping-env.ckpt')
-
-    # print('Restore model...')
-    # rl_2 = DDPGAgent(env, **params)
-    # rl_2.restore_model('models/bit-flipping-env.ckpt')
-
-    # print('evaluate model...')
-    # success_rate, ep_mean_r = rl_2.evaluate_model(num_episodes=100)
-    # print(success_rate)
-    # print(ep_mean_r)
+# if __name__ == '__main__':
+#     env = BitFlippingEnv(n_bits=10, continuous=True, max_steps=10)
+#     #env = gym.make('Distal-1-Tube-Reach-v0')
+#     # Load json file of parameters
+#     with open("training_parameters.json", 'r') as f:
+#         params = json.load(f)
+#
+#     rl_ = DDPGAgent(env, **params)
+#     eval_success_rate, eval_ep_mean_reward = rl_.train()
+#     print('Evaluated final success rate: ,', eval_success_rate)
+#     print('Evaluated final mean reward per ep,', eval_ep_mean_reward)
+#
+#     #print('Saving model...')
+#     #rl_.save_model('models/bit-flipping-env.ckpt')
+#
+#     # print('Restore model...')
+#     # rl_2 = DDPGAgent(env, **params)
+#     # rl_2.restore_model('models/bit-flipping-env.ckpt')
+#
+#     # print('evaluate model...')
+#     # success_rate, ep_mean_r = rl_2.evaluate_model(num_episodes=100)
+#     # print(success_rate)
+#     # print(ep_mean_r)
 
