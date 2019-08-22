@@ -18,7 +18,7 @@ class BitFlippingEnv(GoalEnv):
     :param discrete_obs_space: (bool) Whether to use the discrete observation
         version or not, by default, it uses the MultiBinary one
     """
-    def __init__(self, n_bits=10, continuous=False, max_steps=None,
+    def __init__(self, n_bits=10, continuous=True, max_steps=None,
                  discrete_obs_space=False):
         super(BitFlippingEnv, self).__init__()
         # The achieved goal is determined by the current state
@@ -50,7 +50,7 @@ class BitFlippingEnv(GoalEnv):
         self.desired_goal = np.ones((n_bits,))
         if max_steps is None:
             max_steps = n_bits
-        self.max_episode_steps = max_steps
+        self.max_steps = max_steps
         self.current_step = 0
         self.reset()
 
@@ -102,7 +102,7 @@ class BitFlippingEnv(GoalEnv):
         return 0 if (achieved_goal == desired_goal).all() else -1
 
     def compute_done(self, reward):
-        return reward == 0 or self.current_step >= self.max_episode_steps
+        return reward == 0 or self.current_step >= self.max_steps
 
     def render(self, mode='human'):
         if mode == 'rgb_array':
