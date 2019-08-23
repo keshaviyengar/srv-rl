@@ -129,7 +129,7 @@ class Memory:
 
 
 class DDPGAgent:
-    def __init__(self, env, num_epochs=1000, num_episodes=1000, actor_mlp_hidden_layers=1, actor_mlp_units=256,
+    def __init__(self, env, num_epochs=1, num_episodes=20, actor_mlp_hidden_layers=1, actor_mlp_units=256,
                  critic_mlp_hidden_layers=1, critic_mlp_units=256, actor_learning_rate=0.0001,
                  critic_learning_rate=0.0001, gamma=0.98, tau=0.1, action_noise=1,
                  batch_size=32, buffer_size=5e5, future_k=4):
@@ -235,7 +235,10 @@ class DDPGAgent:
             total_episodes = 0
             critic_losses = []
             actor_losses = []
+            total_actor_gradients = None
+            total_critic_gradients = None
             successes = []
+            episode_rewards = []
             errors = []
             while total_episodes < self.num_episodes:
                 obs = self.env.reset()
@@ -260,12 +263,19 @@ class DDPGAgent:
                 self.memory.push_episode_trajectory(single_episode_trajectory)
                 self.memory.hindsight_experience_replay(single_episode_trajectory)
                 if len(self.memory) > self.batch_size:
-                    actor_loss, critic_loss = self.train_networks()
+                    actor_loss, critic_loss, actor_gradients, critic_gradients = self.train_networks()
+                    if total_actor_gradients is not None:
+                        total_actor_gradients += actor_gradients
+                        total_critic_gradients += critic_gradients
+                    else:
+                        total_actor_gradients = actor_gradients
+                        total_critic_gradients = critic_gradients
                     actor_losses.append(actor_loss.data.numpy())
                     critic_losses.append(critic_loss.data.numpy())
                 # print("Ep: ", total_episodes, " | Ep_r: %.0f" % episode_reward)
                 # print("Actor losses: %.0f" % actor_losses, " | Critic losses: %.0f" % critic_losses)
                 self.action_noise *= 0.9995
+                episode_rewards.append(episode_reward)
                 successes.append(success)
                 # errors.append(error)
                 total_episodes += 1
@@ -274,6 +284,8 @@ class DDPGAgent:
             print("Training actor losses: ", np.mean(actor_losses), " critic losses: ", np.mean(critic_losses))
             # print("Training mean error: ", np.mean(errors))
             self.evaluate()
+
+            return np.mean(episode_rewards), total_actor_gradients, total_critic_gradients
 
     def evaluate(self):
         total_step = 0
@@ -308,7 +320,7 @@ class DDPGAgent:
 
 class Worker(mp.Process):
     def __init__(self, env, agent_args, global_actor_critic, global_target_actor_critic, global_opt, global_ep, global_ep_r, res_queue, actor_grad_queue, critic_grad_queue, global_ep_done, name):
-        super(Worker, self).__init__()
+        super(Worker, self).__init__(target=self.run)
         self.name = 'w%i' % name
         self.g_ep, self.g_ep_r, self.res_queue = global_ep, global_ep_r, res_queue
         self.global_ep_done = global_ep_done
@@ -323,38 +335,14 @@ class Worker(mp.Process):
         self.env = env
 
     def run(self):
-        total_step = 0
-        total_episodes = 0
-        while total_episodes < self.agent.num_episodes:
-            obs = self.env.reset()
-            episode_reward = 0
-            single_episode_trajectory = SingleEpisodeTrajectory()
-            for t in range(self.agent.max_steps):
-                state = np.concatenate([obs["observation"], obs["achieved_goal"]])
-                action = self.agent.get_action(state, obs["desired_goal"])
-                next_obs, reward, done, info = self.env.step(action.flatten())
-                success = info["is_success"]
-                next_state = np.concatenate([next_obs["observation"], next_obs["achieved_goal"]])
-                episode_reward += reward
-                single_episode_trajectory.add(state, action, reward, next_state, next_obs["desired_goal"], done)
-
-                obs = next_obs
-                total_step += 1
-                if done:
-                    break
-            self.agent.memory.push_episode_trajectory(single_episode_trajectory)
-            self.agent.memory.hindsight_experience_replay(single_episode_trajectory)
-            if len(self.agent.memory) > self.agent.batch_size:
-                actor_loss, critic_loss, actor_gradients, critic_gradients = self.agent.train_networks()
-            self.record(episode_reward, actor_gradients, critic_gradients)
-            self.agent.action_noise *= 0.9995
+        # Need to loop
+        for _ in range(1000):
+            ep_r, actor_gradients, critic_gradients = self.agent.train()
+            self.record(ep_r, actor_gradients, critic_gradients)
             self.global_ep_done.wait()
-            total_episodes += 1
-            print(self.name, " ep_r: ", episode_reward, " success: ", success, " actor loss: ", actor_loss.data.numpy(), " critic loss: ", critic_loss.data.numpy())
-
-        self.res_queue.put(None)
 
     def record(self, ep_r, actor_gradients, critic_gradients):
+        print("Global episode: ", self.g_ep.value)
         with self.g_ep.get_lock():
             self.g_ep.value += 1
         with self.g_ep_r.get_lock():
@@ -364,8 +352,10 @@ class Worker(mp.Process):
         self.critic_grad_queue.put(critic_gradients)
 
     def update_networks(self, g_actor, g_critic):
-        self.actor.load_state_dict(global_actor.state_dict)
-        self.critic.load_state_dict(global_critic.state_dict)
+        # Testing if individual workers can learn my themselves
+        pass
+        #self.actor.load_state_dict(g_actor.state_dict)
+        #self.critic.load_state_dict(g_critic.state_dict)
 
 
 if __name__ == '__main__':
@@ -398,7 +388,7 @@ if __name__ == '__main__':
     global_ep, global_ep_r, res_queue = mp.Value('i', 0), mp.Value('d', 0.), mp.Queue()
     global_ep_done = mp.Event()
 
-    num_workers = 5
+    num_workers = 2
     actor_gradients_queues = []
     critic_gradients_queues = []
     [actor_gradients_queues.append(mp.Queue()) for _ in range(num_workers)]
@@ -428,6 +418,7 @@ if __name__ == '__main__':
             critic_local_grads.append(temp_critic)
             del temp_actor
             del temp_critic
+        # Skip update for know, ensure individual workers are learning
         global_ep_done.set()
         global_actor_opt.zero_grad()
         global_critic_opt.zero_grad()
