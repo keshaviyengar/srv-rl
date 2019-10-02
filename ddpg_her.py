@@ -15,6 +15,7 @@ import random
 import test_envs
 import ctm2_envs
 
+import pandas as pd
 
 # Create replay buffer class for storing experiences
 class SingleEpisodeTrajectory:
@@ -126,12 +127,13 @@ class Memory:
 
 
 class DDPGAgent:
-    def __init__(self, env, num_epochs=1000, num_episodes=20, actor_mlp_hidden_layers=1, actor_mlp_units=256,
+    def __init__(self, env, save_data=False, num_epochs=1000, num_episodes=20, actor_mlp_hidden_layers=1, actor_mlp_units=256,
                  critic_mlp_hidden_layers=1, critic_mlp_units=256, actor_learning_rate=0.0001,
                  critic_learning_rate=0.0001, gamma=0.98, tau=0.1, action_noise=1,
                  batch_size=32, buffer_size=5e5, future_k=4):
         self.env = env
         self.eval_env = env
+        self.save_data = save_data
 
         self.goal_dim = env.observation_space["desired_goal"].shape[0]
         self.state_dim = env.observation_space["observation"].shape[0] + self.goal_dim
@@ -152,10 +154,14 @@ class DDPGAgent:
         self.action_high = env.action_space.high
 
         # Networks
-        self.actor = Actor(input_size=self.state_dim + self.goal_dim, hidden_size= actor_mlp_units, hidden_layers=actor_mlp_hidden_layers, output_size=self.action_dim)
-        self.actor_target = Actor(input_size=self.state_dim + self.goal_dim, hidden_size= actor_mlp_units, hidden_layers=actor_mlp_hidden_layers, output_size=self.action_dim)
-        self.critic = Critic(input_size=self.state_dim + self.action_dim + self.goal_dim, hidden_size=critic_mlp_units, hidden_layers=critic_mlp_hidden_layers, output_size=1)
-        self.critic_target = Critic(input_size=self.state_dim + + self.action_dim + self.goal_dim, hidden_size=critic_mlp_units, hidden_layers=critic_mlp_hidden_layers, output_size=1)
+        self.actor = Actor(input_size=self.state_dim + self.goal_dim, hidden_size=actor_mlp_units,
+                           hidden_layers=actor_mlp_hidden_layers, output_size=self.action_dim)
+        self.actor_target = Actor(input_size=self.state_dim + self.goal_dim, hidden_size=actor_mlp_units,
+                                  hidden_layers=actor_mlp_hidden_layers, output_size=self.action_dim)
+        self.critic = Critic(input_size=self.state_dim + self.action_dim + self.goal_dim, hidden_size=critic_mlp_units,
+                             hidden_layers=critic_mlp_hidden_layers, output_size=1)
+        self.critic_target = Critic(input_size=self.state_dim + + self.action_dim + self.goal_dim,
+                                    hidden_size=critic_mlp_units, hidden_layers=critic_mlp_hidden_layers, output_size=1)
 
         # We initialize the target networks as copies of the original networks
         for target_param, param in zip(self.actor_target.parameters(), self.actor.parameters()):
@@ -221,6 +227,15 @@ class DDPGAgent:
     def train(self):
         total_step = 1
 
+        epoch_data = []
+        train_ep_reward_data = []
+        actor_losses_data = []
+        critic_losses_data = []
+        train_success_data = []
+        train_noise_data = []
+        mean_eval_success_data = []
+        mean_eval_reward_per_ep_data = []
+
         for epoch in range(self.num_epochs):
             total_episodes = 0
             critic_losses = []
@@ -238,7 +253,7 @@ class DDPGAgent:
                     action = self.get_action(state, obs["desired_goal"])
                     next_obs, reward, done, info = self.env.step(action.flatten())
                     success = info["is_success"]
-                    # error = info["error"]
+                    error = info["error"]
                     next_state = np.concatenate([next_obs["observation"], next_obs["achieved_goal"]])
                     episode_reward += reward
                     single_episode_trajectory.add(state, action, reward, next_state, next_obs["desired_goal"], done)
@@ -257,13 +272,35 @@ class DDPGAgent:
                 # print("Actor losses: %.0f" % actor_losses, " | Critic losses: %.0f" % critic_losses)
                 self.action_noise *= 0.9995
                 successes.append(success)
-                # errors.append(error)
+                errors.append(error)
                 total_episodes += 1
 
             print("Training epoch: ", epoch, "successes: ", np.mean(successes))
             print("Training actor losses: ", np.mean(actor_losses), " critic losses: ", np.mean(critic_losses))
-            # print("Training mean error: ", np.mean(errors))
-            self.evaluate()
+            print("Training mean error: ", np.mean(errors))
+
+            epoch_data.append(epoch)
+            train_ep_reward_data.append(np.mean(errors))
+            actor_losses_data.append(np.mean(actor_losses))
+            critic_losses_data.append(np.mean(critic_losses))
+            train_success_data.append(np.mean(successes))
+            train_noise_data.append(self.action_noise)
+
+            eval_successes, eval_mean_ep_reward = self.evaluate()
+            mean_eval_success_data.append(np.mean(eval_successes))
+            mean_eval_reward_per_ep_data.append(np.mean(eval_mean_ep_reward))
+
+        if self.save_data:
+            summary_frame = pd.DataFrame()
+            summary_frame['epoch'] = epoch_data
+            summary_frame['train episode reward'] = train_ep_reward_data
+            summary_frame['actor losses'] = actor_losses_data
+            summary_frame['critic losses'] = critic_losses_data
+            summary_frame['train success'] = train_success_data
+            summary_frame['train noise'] = train_noise_data
+            summary_frame['mean eval success'] = mean_eval_success_data
+            summary_frame['mean eval reward per episode'] = mean_eval_reward_per_ep_data
+            summary_frame.to_csv('summary_results.csv')
 
     def evaluate(self):
         total_step = 1
@@ -282,7 +319,7 @@ class DDPGAgent:
                 action = self.get_action(state, obs["desired_goal"], noise=False)
                 next_obs, reward, done, info = self.eval_env.step(action.flatten())
                 success = info["is_success"]
-                # error = info["error"]
+                error = info["error"]
                 next_state = np.concatenate([next_obs["observation"], next_obs["achieved_goal"]])
                 episode_reward += reward
                 obs = next_obs
@@ -291,6 +328,8 @@ class DDPGAgent:
                     break
             total_episodes += 1
             successes.append(success)
-            # errors.append(error)
+            errors.append(error)
             mean_ep_rewards.append(episode_reward)
+
         print("eval successes: ", np.mean(successes), "eval mean reward: ", np.mean(mean_ep_rewards))
+        return successes, mean_ep_rewards

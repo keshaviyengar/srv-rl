@@ -348,14 +348,14 @@ class Worker(mp.Process):
         with self.g_ep_r.get_lock():
             self.g_ep_r.value = ep_r
         self.res_queue.put(self.g_ep_r.value)
+        print(self.name, " queue put")
         self.actor_grad_queue.put(actor_gradients)
         self.critic_grad_queue.put(critic_gradients)
 
     def update_networks(self, g_actor, g_critic):
         # Testing if individual workers can learn my themselves
-        pass
-        #self.actor.load_state_dict(g_actor.state_dict)
-        #self.critic.load_state_dict(g_critic.state_dict)
+        self.actor.load_state_dict(g_actor.state_dict)
+        self.critic.load_state_dict(g_critic.state_dict)
 
 
 if __name__ == '__main__':
@@ -389,20 +389,16 @@ if __name__ == '__main__':
     global_ep_done = mp.Event()
 
     num_workers = 2
-    actor_gradients_queues = []
-    critic_gradients_queues = []
-    [actor_gradients_queues.append(mp.Queue()) for _ in range(num_workers)]
-    [critic_gradients_queues.append(mp.Queue()) for _ in range(num_workers)]
+    actor_gradients_queue = mp.Queue()
+    critic_gradients_queue = mp.Queue()
 
     # Start workers
     workers = [Worker(env, {}, [global_actor, global_critic], [global_actor_target, global_critic_target],
                       [global_actor_opt, global_critic_opt], global_ep, global_ep_r, res_queue,
-                      actor_gradients_queues[i], critic_gradients_queues[i], global_ep_done, i)
+                      actor_gradients_queue, critic_gradients_queue, global_ep_done, i)
                for i in range(num_workers)]
     [w.start() for w in workers]
     res = []
-    actor_local_grads = []
-    critic_local_grads = []
     while True:
         global_ep_done.clear()
         r = res_queue.get()
@@ -411,15 +407,19 @@ if __name__ == '__main__':
             del r
         else:
             break
-        for i in range(num_workers):
-            temp_actor = actor_gradients_queues[i].get()
-            temp_critic = critic_gradients_queues[i].get()
-            actor_local_grads.append(temp_actor)
-            critic_local_grads.append(temp_critic)
-            del temp_actor
-            del temp_critic
-        # Skip update for know, ensure individual workers are learning
-        global_ep_done.set()
+        actor_local_grads = []
+        critic_local_grads = []
+        # Look into using joinable queues
+        while (len(actor_local_grads) < num_workers) and (len(critic_local_grads) < num_workers):
+            temp_actor_grad = actor_gradients_queue.get()
+            temp_critic_grad = actor_gradients_queue.get()
+            actor_local_grads.append(temp_actor_grad)
+            critic_local_grads.append(temp_critic_grad)
+            print("Size of actor grad: ", len(actor_local_grads))
+            print("Size of critic grad: ", len(critic_local_grads))
+            del temp_actor_grad
+            del temp_critic_grad
+        print("Computing gradient")
         global_actor_opt.zero_grad()
         global_critic_opt.zero_grad()
         actor_grad_update = torch.mean(torch.stack(actor_local_grads))
