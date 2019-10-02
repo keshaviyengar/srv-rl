@@ -2,9 +2,12 @@ import gym
 import argparse
 from ddpg_her import DDPGAgent
 
+import ctm2_envs
+
 parser = argparse.ArgumentParser(description="Implementation of DDPG with HER with multiprocessing for "
                                              "concentric tube robots.")
-parser.add_argument("--env", type=str, default="bit-flipping-v0")
+#parser.add_argument("--env", type=str, default="bit-flipping-v0")
+parser.add_argument("--env", type=str, default="Distal-1-Tube-Reach-v0")
 parser.add_argument("--env-args", type=dict, default={})
 parser.add_argument("--num-epochs", type=int, default=1000)
 parser.add_argument("--num-episodes", type=int, default=20)

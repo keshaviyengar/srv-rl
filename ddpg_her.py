@@ -145,7 +145,7 @@ class DDPGAgent:
 
         self.num_epochs = num_epochs
         self.num_episodes = num_episodes
-        self.max_steps = self.env.max_steps
+        self.max_steps = self.env.max_episode_steps
 
         self.k = future_k
 
