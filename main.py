@@ -1,6 +1,7 @@
 import gym
 import argparse
 from ddpg_her import DDPGAgent
+import json
 
 import ctm2_envs
 
@@ -22,7 +23,7 @@ parser.add_argument("--actor-mlp-hidden-layers", type=int, default=1)
 parser.add_argument("--critic-mlp-units", type=int, default=256)
 parser.add_argument("--critic-mlp-hidden-layers", type=int, default=1)
 parser.add_argument("--future-k", type=int, default=4)
-parser.add_argument("--action-noise", type=int, default=1)
+parser.add_argument("--action-noise-std", type=int, default=1)
 parser.add_argument("--training-json-file", type=str, default="training_parameters.json")
 parser.add_argument("--hyperparam-constants-json-file", type=str, default="hyperparam_search_constants.json")
 
@@ -45,6 +46,9 @@ env = gym.make(args.env)
 del args_dict["env_args"]
 del args_dict["env"]
 
+with open("training_parameters.json", "r") as f:
+    training_json = json.load(f)
+
 if train:
-    rl_agent = DDPGAgent(env, **args_dict)
+    rl_agent = DDPGAgent(env, **training_json)
     rl_agent.train()

@@ -127,10 +127,28 @@ class Memory:
 
 
 class DDPGAgent:
-    def __init__(self, env, save_data=False, num_epochs=1000, num_episodes=20, actor_mlp_hidden_layers=1, actor_mlp_units=256,
-                 critic_mlp_hidden_layers=1, critic_mlp_units=256, actor_learning_rate=0.0001,
-                 critic_learning_rate=0.0001, gamma=0.98, tau=0.1, action_noise=1,
+    def __init__(self, env, save_data=False, num_epochs=1000, num_episodes=20, actor_mlp_hidden_layers=1,
+                 actor_mlp_units=256, critic_mlp_hidden_layers=1, critic_mlp_units=256, actor_learning_rate=0.0001,
+                 critic_learning_rate=0.0001, gamma=0.98, tau=0.1, action_noise_std=1,
                  batch_size=32, buffer_size=5e5, future_k=4):
+
+        print("save data: {}\n"
+              "num_epochs: {}\n"
+              "num_episodes: {}\n"
+              "actor_mlp_hidden_layers: {}\n"
+              "actor_mlp_units: {}\n"
+              "critic_mlp_hidden_layers: {}\n"
+              "critic_mlp_units: {}\n"
+              "actor_learning_rate: {}\n"
+              "critic_learning_rate: {}\n"
+              "gamma: {}\n"
+              "tau: {}\n"
+              "action_nose_std: {}\n"
+              "batch_size: {}\n"
+              "future_k: {}".format(save_data, num_epochs, num_episodes, actor_mlp_hidden_layers, actor_mlp_units,
+                                    critic_mlp_hidden_layers, critic_mlp_units, actor_learning_rate,
+                                    critic_learning_rate, gamma, tau, action_noise_std, batch_size, buffer_size,
+                                    future_k))
         self.env = env
         self.eval_env = env
         self.save_data = save_data
@@ -149,7 +167,7 @@ class DDPGAgent:
 
         self.k = future_k
 
-        self.action_noise = action_noise
+        self.action_noise_std = action_noise_std
         self.action_low = env.action_space.low
         self.action_high = env.action_space.high
 
@@ -184,7 +202,7 @@ class DDPGAgent:
             action = self.actor_target(state, goal)
         action = action.detach().numpy()
         if noise:
-            action = np.clip(np.random.normal(action, self.action_noise), self.action_low, self.action_high)
+            action = np.clip(np.random.normal(action, self.action_noise_std), self.action_low, self.action_high)
         return np.clip(action, self.action_low, self.action_high)
 
     def train_networks(self):
@@ -232,7 +250,6 @@ class DDPGAgent:
         actor_losses_data = []
         critic_losses_data = []
         train_success_data = []
-        train_noise_data = []
         mean_eval_success_data = []
         mean_eval_reward_per_ep_data = []
 
@@ -270,7 +287,6 @@ class DDPGAgent:
                     critic_losses.append(critic_loss.data.numpy())
                 # print("Ep: ", total_episodes, " | Ep_r: %.0f" % episode_reward)
                 # print("Actor losses: %.0f" % actor_losses, " | Critic losses: %.0f" % critic_losses)
-                self.action_noise *= 0.9995
                 successes.append(success)
                 errors.append(error)
                 total_episodes += 1
@@ -284,7 +300,6 @@ class DDPGAgent:
             actor_losses_data.append(np.mean(actor_losses))
             critic_losses_data.append(np.mean(critic_losses))
             train_success_data.append(np.mean(successes))
-            train_noise_data.append(self.action_noise)
 
             eval_successes, eval_mean_ep_reward = self.evaluate()
             mean_eval_success_data.append(np.mean(eval_successes))
@@ -297,7 +312,6 @@ class DDPGAgent:
             summary_frame['actor losses'] = actor_losses_data
             summary_frame['critic losses'] = critic_losses_data
             summary_frame['train success'] = train_success_data
-            summary_frame['train noise'] = train_noise_data
             summary_frame['mean eval success'] = mean_eval_success_data
             summary_frame['mean eval reward per episode'] = mean_eval_reward_per_ep_data
             summary_frame.to_csv('summary_results.csv')
