@@ -1,5 +1,5 @@
 {
-    "save_data": false,
+    "save_data": true,
     "gamma": 0.95,
     "actor_learning_rate": 0.0005,
     "critic_learning_rate": 0.0005,
@@ -11,7 +11,7 @@
     "critic_mlp_units": 128,
     "critic_mlp_hidden_layers": 3,
     "future_k":8,
-    "num_epochs": 3000,
+    "num_epochs": 100000,
     "num_episodes": 20,
     "action_noise_std":0.35
 }
