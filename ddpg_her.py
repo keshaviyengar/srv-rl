@@ -17,6 +17,10 @@ import ctm2_envs
 
 import pandas as pd
 
+import signal
+import sys
+
+
 # Create replay buffer class for storing experiences
 class SingleEpisodeTrajectory:
     def __init__(self):
@@ -193,6 +197,8 @@ class DDPGAgent:
         self.actor_optimizer = optim.Adam(self.actor.parameters(), lr=actor_learning_rate)
         self.critic_optimizer = optim.Adam(self.critic.parameters(), lr=critic_learning_rate)
 
+        signal.signal(signal.SIGINT, self.signal_handler)
+
     def get_action(self, state, goal, noise=True):
         state = torch.autograd.Variable(torch.as_tensor(state).float().unsqueeze(0))
         goal = torch.autograd.Variable(torch.as_tensor(goal).float().unsqueeze(0))
@@ -245,13 +251,13 @@ class DDPGAgent:
     def train(self):
         total_step = 1
 
-        epoch_data = []
-        train_ep_reward_data = []
-        actor_losses_data = []
-        critic_losses_data = []
-        train_success_data = []
-        mean_eval_success_data = []
-        mean_eval_reward_per_ep_data = []
+        self.epoch_data = []
+        self.train_ep_reward_data = []
+        self.actor_losses_data = []
+        self.critic_losses_data = []
+        self.train_success_data = []
+        self.mean_eval_success_data = []
+        self.mean_eval_reward_per_ep_data = []
 
         for epoch in range(self.num_epochs):
             total_episodes = 0
@@ -295,25 +301,25 @@ class DDPGAgent:
             print("Training actor losses: ", np.mean(actor_losses), " critic losses: ", np.mean(critic_losses))
             print("Training mean error: ", np.mean(errors))
 
-            epoch_data.append(epoch)
-            train_ep_reward_data.append(np.mean(errors))
-            actor_losses_data.append(np.mean(actor_losses))
-            critic_losses_data.append(np.mean(critic_losses))
-            train_success_data.append(np.mean(successes))
+            self.epoch_data.append(epoch)
+            self.train_ep_reward_data.append(np.mean(errors))
+            self.actor_losses_data.append(np.mean(actor_losses))
+            self.critic_losses_data.append(np.mean(critic_losses))
+            self.train_success_data.append(np.mean(successes))
 
             eval_successes, eval_mean_ep_reward = self.evaluate()
-            mean_eval_success_data.append(np.mean(eval_successes))
-            mean_eval_reward_per_ep_data.append(np.mean(eval_mean_ep_reward))
+            self.mean_eval_success_data.append(np.mean(eval_successes))
+            self.mean_eval_reward_per_ep_data.append(np.mean(eval_mean_ep_reward))
 
         if self.save_data:
             summary_frame = pd.DataFrame()
-            summary_frame['epoch'] = epoch_data
-            summary_frame['train episode reward'] = train_ep_reward_data
-            summary_frame['actor losses'] = actor_losses_data
-            summary_frame['critic losses'] = critic_losses_data
-            summary_frame['train success'] = train_success_data
-            summary_frame['mean eval success'] = mean_eval_success_data
-            summary_frame['mean eval reward per episode'] = mean_eval_reward_per_ep_data
+            summary_frame['epoch'] = self.epoch_data
+            summary_frame['train episode reward'] = self.train_ep_reward_data
+            summary_frame['actor losses'] = self.actor_losses_data
+            summary_frame['critic losses'] = self.critic_losses_data
+            summary_frame['train success'] = self.train_success_data
+            summary_frame['mean eval success'] = self.mean_eval_success_data
+            summary_frame['mean eval reward per episode'] = self.mean_eval_reward_per_ep_data
             summary_frame.to_csv('summary_results.csv')
 
     def evaluate(self):
@@ -347,3 +353,16 @@ class DDPGAgent:
 
         print("eval successes: ", np.mean(successes), "eval mean reward: ", np.mean(mean_ep_rewards))
         return successes, mean_ep_rewards
+
+    def signal_handler(self, sig, frame):
+        if self.save_data:
+            summary_frame = pd.DataFrame()
+            summary_frame['epoch'] = self.epoch_data
+            summary_frame['train episode reward'] = self.train_ep_reward_data
+            summary_frame['actor losses'] = self.actor_losses_data
+            summary_frame['critic losses'] = self.critic_losses_data
+            summary_frame['train success'] = self.train_success_data
+            summary_frame['mean eval success'] = self.mean_eval_success_data
+            summary_frame['mean eval reward per episode'] = self.mean_eval_reward_per_ep_data
+            summary_frame.to_csv('summary_results.csv')
+        sys.exit(0)
